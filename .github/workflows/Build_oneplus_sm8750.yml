@@ -45,7 +45,7 @@ on:
         default: ''
 
       custom_build_user:
-        description: "🏷️ 编译者名字（留空=默认；只进 uname -v 的编译者字段，不进 vermagic，可随便取）"
+        description: "🏷️ 名字（留空=Cyrene）：进 uname -v 的编译者括号，同时当 FinaSU 分支名 → 管理器「内核完整版本」显示成 v1.6.4-<sha>@这个名字"
         required: false
         default: ''
 
@@ -593,7 +593,15 @@ jobs:
         run: |
           cd kernel_workspace
           git clone https://github.com/LyraVoid/FinaSU.git FinaSU
-          sh ./FinaSU/kernel/setup.sh --dir "$PWD/FinaSU" v1.6.4
+          cd FinaSU
+          # 管理器「内核完整版本」= v<tag>-<sha>@<分支名>（kernel/Kbuild:216），分支名就在这里定
+          FINASU_BRANCH="$(printf '%s' "${CUSTOM_BUILD_USER:-Cyrene}" | sed -e 's/[[:space:]]/-/g' -e 's#[/\\]#-#g' -e 's/[~^:?*]//g' -e 's/\[//g' -e 's/\]//g' -e 's/\.\{2,\}/-/g' -e 's/^[.-]\+//' -e 's/[.-]\+$//')"
+          [ -z "$FINASU_BRANCH" ] && FINASU_BRANCH="Cyrene"
+          git fetch origin --tags
+          git checkout -B "$FINASU_BRANCH" v1.6.4
+          echo "FinaSU 分支名：$FINASU_BRANCH（管理器将显示 v1.6.4-<sha>@$FINASU_BRANCH）"
+          cd ..
+          sh ./FinaSU/kernel/setup.sh --dir "$PWD/FinaSU" "$FINASU_BRANCH"
           echo "校验绑定："
           ls -l ./common/drivers/kernelsu
           grep -n "kernelsu" ./common/drivers/Makefile
