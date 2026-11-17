@@ -47,7 +47,7 @@ on:
       enable_susfs:
         description: "启用SUSFS"
         required: true
-        default: false
+        default: true
         type: boolean
       
       enable_droidspaces:
@@ -582,12 +582,19 @@ jobs:
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' ./security/Kconfig
 
           
-      - name: ⚙️ Skip KSU (不内置任何 KSU，Root 交给 FinaSU LKM)
+      - name: ⚙️ Install FinaSU (Built-In 内置到 vmlinux)
         id: ksu_step
         run: |
-          echo "KSUVER=noKSU" >> $GITHUB_ENV
-          echo "ksuver=noKSU" >> $GITHUB_OUTPUT
-          echo "已跳过 KSU 集成：本内核不含任何内核级 Root 驱动"
+          cd kernel_workspace
+          git clone https://github.com/LyraVoid/FinaSU.git FinaSU
+          sh ./FinaSU/kernel/setup.sh --dir "$PWD/FinaSU" v1.6.4
+          echo "校验绑定："
+          ls -l ./common/drivers/kernelsu
+          grep -n "kernelsu" ./common/drivers/Makefile
+          grep -n "kernelsu/Kconfig" ./common/drivers/Kconfig
+          echo "KSUVER=FinaSU-v1.6.4-33211-BuiltIn" >> $GITHUB_ENV
+          echo "ksuver=FinaSU-v1.6.4-33211-BuiltIn" >> $GITHUB_OUTPUT
+          echo "已内置 FinaSU：Root 由内核直接提供（管理器显示 Built-In）"
       - name: 🔧 Set up SUSFS (配置 SUSFS)
         if: ${{ env.ENABLE_SUSFS == 'true' }}
         run: |
@@ -599,13 +606,30 @@ jobs:
           cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           cd ./common
           patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
-          patch -p1 -N -F 3 < 69_hide_stuff.patch || true
+          if ls ./*.rej ./fs/*.rej ./include/linux/*.rej > /dev/null 2>&1; then
+            echo "::error::SUSFS 50 补丁存在 reject，内核侧实现不完整"
+            exit 1
+          fi
+          test -f ./fs/susfs.c || { echo "::error::fs/susfs.c 不存在，SUSFS 内核侧没打上，中止"; exit 1; }
+          grep -q susfs_add_sus_type ./fs/susfs.c \
+            && echo "[OK] SUSFS v2.4.0 类型注册入口在位" \
+            || echo "::warning::fs/susfs.c 里没有 susfs_add_sus_type（可能是旧版补丁，FinaSU 会编出上一代行为）"
+          patch -p1 -N -F 3 < 69_hide_stuff.patch \
+            || echo "::warning::69_hide_stuff 未应用（它是 KSU-Next 钩子模型，与 FinaSU 不同，可忽略）"
           echo "[OK] SUSFS 补丁处理流程全部完成"
 
       - name: 🔧 Set gki_defconfig (设置编译配置) 
         run: |
           cd kernel_workspace
-          # === 无 KSU 版追加：网络增强 + ZRAM 可用 LZ4 ===
+          # === FinaSU 内置所需的编译前提 ===
+          echo "CONFIG_KPROBES=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_EXT4_FS=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KALLSYMS_ALL=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_HEADERS_INSTALL=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_THREAD_INFO_IN_TASK=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+          # === 网络增强 + ZRAM 可用 LZ4 ===
           echo "CONFIG_WIREGUARD=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CIFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_NET_SCH_CAKE=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -614,27 +638,18 @@ jobs:
           echo "CONFIG_CRYPTO_LZ4HC=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP_SET=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP_SET_MAX=65534" >> ./common/arch/arm64/configs/gki_defconfig
-          
-          if [ "${{ env.ENABLE_SUSFS }}" == 'true' ];then
-            echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+          # === SUSFS（仅在 enable_susfs 时）===
+          if [ "${{ env.ENABLE_SUSFS }}" == 'true' ]; then
+            for opt in KSU_SUSFS KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_SUS_KSTAT \
+                       KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
+                       KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT \
+                       KSU_SUSFS_SUS_MAP KSU_SUSFS_PRIORITY_UID_FILTER; do
+              echo "CONFIG_${opt}=y" >> ./common/arch/arm64/configs/gki_defconfig
+            done
           else
             echo "未启用SUSFS 跳过SUSFS配置"
           fi
-
 
           echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -722,7 +737,11 @@ jobs:
           sudo rm -rf /opt/ghc &
           sudo rm -rf /opt/hostedtoolcache/CodeQL &
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig &&
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error \
+            KSU_REQUIRE_PREINIT=1 \
+            KSU_EXPECTED_SIZE=0x1c639b4 \
+            KSU_EXPECTED_HASH=0718ad90e56eb3475c1cc7b27d9ce20375148ebf05699ad64f83b1d0479c94b9 \
+            Image
           LD_PRELOAD=$PRELOAD_LIBS stat ./Makefile
           echo "ccache 状态："
           ccache -s
@@ -801,7 +820,7 @@ jobs:
       - name: 📤 Upload AnyKernel3 (上传 Anykernel3)
         uses: actions/upload-artifact@v6
         with:
-         name: AK3_${{ env.DEVICES_NAME }}_noKSU_scx
+         name: AK3_${{ env.DEVICES_NAME }}_FinaSU_SUSFS
          path: ./AnyKernel3/*
 
   upload_rekernel:
@@ -955,7 +974,7 @@ jobs:
           DEVICE_NAME="${{ github.event.inputs.device_name }}"
 
           # KSU 版本号（来自 build job 输出的 ksuver）
-          KSU_VER="无内置 KSU（Root 由 FinaSU LKM 提供）"
+          KSU_VER="FinaSU v1.6.4-33211（Built-In）"
 
           # 功能配置描述
           FEATURES=""
