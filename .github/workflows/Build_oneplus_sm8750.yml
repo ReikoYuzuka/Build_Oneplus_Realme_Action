@@ -578,6 +578,14 @@ jobs:
           cd ./common
           git apply -p1 < 001-lz4.patch || true
           patch -p1 < 002-zstd.patch || true
+          # 这份 zstd 1.5.7 升级补丁里有个 x86 专属 hunk 在真我树上对不上（BMI2 那套，#else 分支
+          # 里的 .private_extern 与 __i386__）。arm64 不参与那段编译，留档备查即可。
+          ZREJ="$(find lib/zstd -name '*.rej' -print)"
+          if [ -n "$ZREJ" ]; then
+            echo "::warning::zstd 补丁残留 reject（预期内，arm64 不编译那段）："
+            echo "$ZREJ"
+            for r in $ZREJ; do echo "--- $r ---"; head -n 20 "$r"; done
+          fi
           
       - name: 🔧 Set Baseband-guard (开启 BBG 基带守护)
         if: ${{ env.ENABLE_BBG == 'true' }}
@@ -619,6 +627,9 @@ jobs:
           cp ./susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           cd ./common
+          # 进这一步之前可能已有别的步骤留下 .rej（比如 zstd 升级），先拍快照，
+          # 下面只认「这一步新产生的」reject。
+          BEFORE_REJ="$(find . -name '*.rej' -print | sort)"
           # 上游 50 补丁里 fs/proc/task_mmu.c 那一段的 hunk 行号是乱序的
           # （-275 排在 -389 之后、-999 又出现两次），在真我 6.6.89 树上必然有一个 hunk fail。
           # 先把这一段从补丁里剔掉，再用锚点脚本单独打，避免把钩子插进注释里。
@@ -640,9 +651,9 @@ jobs:
           STRIPPATCH
           patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
           python3 "$GITHUB_WORKSPACE/.github/scripts/fix_task_mmu_susfs.py"
-          REJ="$(find . -name '*.rej' -print)"
+          REJ="$(comm -13 <(printf '%s\n' "$BEFORE_REJ") <(find . -name '*.rej' -print | sort) | sed '/^$/d')"
           if [ -n "$REJ" ]; then
-            echo "::error::SUSFS 50 补丁存在 reject，内核侧实现不完整："
+            echo "::error::SUSFS 50 补丁新增 reject，内核侧实现不完整："
             echo "$REJ"
             exit 1
           fi
