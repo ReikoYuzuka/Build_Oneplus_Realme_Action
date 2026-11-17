@@ -619,7 +619,27 @@ jobs:
           cp ./susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           cd ./common
+          # 上游 50 补丁里 fs/proc/task_mmu.c 那一段的 hunk 行号是乱序的
+          # （-275 排在 -389 之后、-999 又出现两次），在真我 6.6.89 树上必然有一个 hunk fail。
+          # 先把这一段从补丁里剔掉，再用锚点脚本单独打，避免把钩子插进注释里。
+          python3 <<'STRIPPATCH'
+          import re
+          p = '50_add_susfs_in_gki-android15-6.6.patch'
+          s = open(p, encoding='utf-8', errors='surrogateescape').read()
+          parts = re.split(r'(?m)^(diff --git )', s)
+          out = [parts[0]]
+          dropped = 0
+          for i in range(1, len(parts), 2):
+              blk = parts[i] + parts[i + 1]
+              if 'a/fs/proc/task_mmu.c' in blk.split('\n')[0]:
+                  dropped += 1
+                  continue
+              out.append(blk)
+          open(p, 'w', encoding='utf-8', errors='surrogateescape').write(''.join(out))
+          print('[INFO] 已从 50 补丁剔除 fs/proc/task_mmu.c 段落 x%d' % dropped)
+          STRIPPATCH
           patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
+          python3 "$GITHUB_WORKSPACE/.github/scripts/fix_task_mmu_susfs.py"
           REJ="$(find . -name '*.rej' -print)"
           if [ -n "$REJ" ]; then
             echo "::error::SUSFS 50 补丁存在 reject，内核侧实现不完整："
