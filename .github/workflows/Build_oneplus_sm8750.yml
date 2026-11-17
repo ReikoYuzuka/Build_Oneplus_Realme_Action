@@ -149,8 +149,11 @@ jobs:
             oneplus_ace5_ultra | realme_GT7)
                 DEFAULT_SUFFIX='-android15-8-ge58033dc8ea6-abogki498046332-4k'
               ;;
-            oneplus_13 | oneplus_13t | oneplus_ace5_pro | oneplus_ace_6 | oneplus_pad_2 | realme_GT7pro | realme_GT7pro_Speed | realme_GT8)
+            oneplus_13 | oneplus_13t | oneplus_ace5_pro | oneplus_ace_6 | oneplus_pad_2 | realme_GT7pro | realme_GT7pro_Speed)
                 DEFAULT_SUFFIX='-android15-8-g9bc34d5b0c79-abogki537459655-4k'
+              ;;
+            realme_GT8)
+                DEFAULT_SUFFIX='-android15-8-g29d86c5fc9dd-abogki428889875-4k'
               ;;
           esac
             echo "DEFAULT_SUFFIX=$DEFAULT_SUFFIX" >> $GITHUB_ENV
@@ -639,6 +642,10 @@ jobs:
           echo "内核后缀：$DEFAULT_SUFFIX"
           ESCAPED_SUFFIX=$(printf '%s\n' "$DEFAULT_SUFFIX" | sed 's:[\/&]:\\&:g')
           sudo sed -i "s/-4k/$ESCAPED_SUFFIX/g" ./common/arch/arm64/configs/gki_defconfig
+          # 真机内核实测为 6.6.66（boot.img 里的 Linux version 串），源码 SUBLEVEL=89
+          # 不改回 66 的话 vermagic 前段不一致，vendor 分区的 .ko 会全部拒载
+          sudo sed -i 's/^SUBLEVEL = .*/SUBLEVEL = 66/' ./common/Makefile
+          echo "Makefile 版本行：$(grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' ./common/Makefile | tr '\n' ' ')"
           sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
 
       - name: 📥 Start build timer (构建计时开始)
