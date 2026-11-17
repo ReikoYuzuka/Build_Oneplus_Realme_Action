@@ -993,7 +993,7 @@ jobs:
           if [ "${{ github.event.inputs.enable_droidspaces }}" = "true" ]; then
             FEATURES="${FEATURES}- ✅ Droidspaces 容器支持"$'\n'
           fi
-          FEATURES="${FEATURES}- ✅ 无内置 KSU（配 FinaSU LKM）"$'\n'
+          FEATURES="${FEATURES}- ✅ FinaSU v1.6.4-33211 内置（Built-In）"$'\n'
           if [ "${{ github.event.inputs.enable_susfs }}" = "true" ]; then
             FEATURES="${FEATURES}- ✅ SUSFS 挂载支持"$'\n'
           fi
@@ -1015,7 +1015,7 @@ jobs:
           ### 📱 SM8750 欧加真通用内核 | 构建信息
 
           - **内核版本**: SM8750 (Android 15 / 6.6)
-          - **Root 方案**: 无内置 KSU，刷完后用 FinaSU 修补原机 init_boot
+          - **Root 方案**: FinaSU v1.6.4 内置（Built-In），刷完直接装管理器
           - **编译时间**: ${TIME_FORM}
           - **编译机型**: ${DEVICE_NAME}
           - **内核后缀**: ${KERNEL_SUFFIX}
@@ -1034,8 +1034,8 @@ jobs:
 
           ### 📋 安装方法 | Installation Guide
 
-          1. 本内核不含任何内核级 Root。刷入后请用 FinaSU 以 LKM 方式修补**原机 init_boot** 再刷入 init_boot；
-          2. FinaSU 与任何内置 KSU 内核不可共存——此前装过 KSU / SukiSU / BakaSU 的，先刷回原厂 boot 再刷本内核；
+          1. 本内核已内置 FinaSU，直接刷 boot 后开机装管理器（必须是 v1.6.4 / 33211，内核里写死了这一版的签名大小与 SHA256，换版本会被判为不匹配、显示驱动不可用）；
+          2. FinaSU 与其他 Root 方案不可共存——此前装过 KSU / SukiSU / BakaSU / FinaSU LKM 的，先刷回原厂 boot 与 init_boot 再刷本内核，否则两套驱动抢 hook；
           3. 若启用 Re-Kernel，需刷入配套Re-Kernel模块并配合 NoActive 软件使用，以提升后台冻结能力。
 
           #### 🔗 相关链接
