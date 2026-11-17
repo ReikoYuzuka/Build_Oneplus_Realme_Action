@@ -895,6 +895,14 @@ jobs:
          name: AK3_${{ env.DEVICES_NAME }}_FinaSU_SUSFS
          path: ./AnyKernel3/*
 
+      - name: 📤 Upload Re-Kernel module (上传自编译 rekernel.ko)
+        if: ${{ env.ENABLE_REKERNEL == 'true' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: rekernel_ko
+          path: ./kernel_workspace/out/drivers/rekernel/rekernel.ko
+          if-no-files-found: warn
+
   upload_rekernel:
     name: Upload Re-Kernel Module
     if: ${{ github.event.inputs.enable_ReKernel == 'true' }}
@@ -1030,6 +1038,9 @@ jobs:
           # 列出所有待上传的文件
           echo ""
           echo "=== 待上传到 Release 的文件 ==="
+
+          # 收集本次自编译的 rekernel.ko（vermagic 与本内核一致，官方预编译模块可能对不上）
+          find ./release_assets -type f -name "rekernel.ko" -exec cp {} ./release_assets/rekernel-built.ko \; 2>/dev/null || true
           find ./release_assets -maxdepth 1 -type f | sort
 
       - name: 🏷️ Create Release and Upload Assets (创建发布并上传)
@@ -1124,7 +1135,7 @@ jobs:
           echo ""
 
           # 收集所有待上传的文件（仅 AK3 zip 和 Re-Kernel zip）
-          RELEASE_FILES=$(find ./release_assets -maxdepth 1 -type f \( -name 'AK3_*.zip' -o -name 'Re-Kernel-v*.zip' \) 2>/dev/null || true)
+          RELEASE_FILES=$(find ./release_assets -maxdepth 1 -type f \( -name 'AK3_*.zip' -o -name 'Re-Kernel-v*.zip' -o -name 'rekernel-built.ko' \) 2>/dev/null || true)
 
           if [ -z "$RELEASE_FILES" ]; then
             echo "::warning::没有找到待上传的发布文件"
