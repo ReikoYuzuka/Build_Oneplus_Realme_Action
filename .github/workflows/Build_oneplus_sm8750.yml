@@ -39,6 +39,11 @@ on:
         required: false
         default: ''
 
+      kernel_sublevel:
+        description: "🔢 强制内核 sublevel (留空=保持源码原值 89；填 66 表示伪装成 6.6.66 以匹配旧 vendor)"
+        required: false
+        default: ''
+
       enable_susfs:
         description: "启用SUSFS"
         required: true
@@ -85,6 +90,7 @@ jobs:
       DEVICES_NAME:           ${{ github.event.inputs.device_name }}
       CUSTOM_KERNEL_SUFFIX:   ${{ github.event.inputs.custom_kernel_suffix }}
       CUSTOM_KERNEL_TIME:     ${{ github.event.inputs.custom_kernel_time }}
+      KERNEL_SUBLEVEL:        ${{ github.event.inputs.kernel_sublevel }}
       ENABLE_SUSFS:           ${{ github.event.inputs.enable_susfs }}
       ENABLE_DROIDSPACES:     ${{ github.event.inputs.enable_droidspaces }}
       ENABLE_REKERNEL:        ${{ github.event.inputs.enable_ReKernel }}
@@ -153,6 +159,8 @@ jobs:
                 DEFAULT_SUFFIX='-android15-8-g9bc34d5b0c79-abogki537459655-4k'
               ;;
             realme_GT8)
+                # 取自整包镜像 boot.img 的 Linux version（6.6.66 那一版）
+                # 若真机已升到 6.6.89，请用 custom_kernel_suffix 填手机 uname -r 去掉 "6.6.x" 后的原文
                 DEFAULT_SUFFIX='-android15-8-g29d86c5fc9dd-abogki428889875-4k'
               ;;
           esac
@@ -642,9 +650,14 @@ jobs:
           echo "内核后缀：$DEFAULT_SUFFIX"
           ESCAPED_SUFFIX=$(printf '%s\n' "$DEFAULT_SUFFIX" | sed 's:[\/&]:\\&:g')
           sudo sed -i "s/-4k/$ESCAPED_SUFFIX/g" ./common/arch/arm64/configs/gki_defconfig
-          # 真机内核实测为 6.6.66（boot.img 里的 Linux version 串），源码 SUBLEVEL=89
-          # 不改回 66 的话 vermagic 前段不一致，vendor 分区的 .ko 会全部拒载
-          sudo sed -i 's/^SUBLEVEL = .*/SUBLEVEL = 66/' ./common/Makefile
+          # kernel_sublevel 留空则保持源码原值（realme 源码 SUBLEVEL=89）
+          # 仅当「编的内核版本」与「真机 vendor 分区」不一致时才填，用于对齐 vermagic 前段
+          if [ -n "${KERNEL_SUBLEVEL}" ]; then
+            sudo sed -i "s/^SUBLEVEL = .*/SUBLEVEL = ${KERNEL_SUBLEVEL}/" ./common/Makefile
+            echo "已强制 SUBLEVEL=${KERNEL_SUBLEVEL}"
+          else
+            echo "保持源码默认 SUBLEVEL"
+          fi
           echo "Makefile 版本行：$(grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' ./common/Makefile | tr '\n' ' ')"
           sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
 
