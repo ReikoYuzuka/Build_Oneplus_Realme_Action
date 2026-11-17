@@ -620,8 +620,10 @@ jobs:
           cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           cd ./common
           patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
-          if ls ./*.rej ./fs/*.rej ./include/linux/*.rej > /dev/null 2>&1; then
-            echo "::error::SUSFS 50 补丁存在 reject，内核侧实现不完整"
+          REJ="$(find . -name '*.rej' -print)"
+          if [ -n "$REJ" ]; then
+            echo "::error::SUSFS 50 补丁存在 reject，内核侧实现不完整："
+            echo "$REJ"
             exit 1
           fi
           test -f ./fs/susfs.c || { echo "::error::fs/susfs.c 不存在，SUSFS 内核侧没打上，中止"; exit 1; }
@@ -689,6 +691,25 @@ jobs:
           fi
           echo "Makefile 版本行：$(grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' ./common/Makefile | tr '\n' ' ')"
           sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
+
+      - name: 🩹 Relax host-tool -Werror (libbpf / resolve_btfids)
+        run: |
+          cd kernel_workspace
+          # tools/lib/bpf/Makefile 第 89 行是 `override CFLAGS += -Werror -Wall`。
+          # 它在 HOSTCFLAGS / EXTRA_CFLAGS 之后追加，命令行传 -Wno-error 压不住（后写的赢）。
+          # 6.6.89 的老 libbpf 里 `next_path = strchr(s, ':')` 是 char* 收 const char*，
+          # 新 clang 直接按错误处理 → resolve_btfids 编不过 → __sub-make 挂。
+          # 只作用于宿主机辅助工具，不进内核镜像、不影响 vermagic。
+          for m in ./common/tools/lib/bpf/Makefile \
+                   ./common/tools/lib/subcmd/Makefile \
+                   ./common/tools/bpf/resolve_btfids/Makefile; do
+            if [ -f "$m" ]; then
+              sed -i 's/\([[:space:]]\)-Werror\b/\1-Wno-error/g' "$m"
+              echo "--- $m ---"
+              grep -n 'Wno-error' "$m" || echo "（该文件不含 -Werror，未改）"
+            fi
+          done
+          echo "[OK] 宿主机工具的 -Werror 已放宽"
 
       - name: 📥 Start build timer (构建计时开始)
         run: 
