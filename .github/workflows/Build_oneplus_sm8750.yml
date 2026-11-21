@@ -45,7 +45,7 @@ on:
         default: ''
 
       custom_build_user:
-        description: "🏷️ 名字（留空=Cyrene）：进 uname -v 的编译者括号，同时当 FinaSU 分支名 → 管理器「内核完整版本」显示成 v1.6.4-<sha>@这个名字"
+        description: "🏷️ 名字（留空=Cyrene）：进 uname -v 的编译者括号，同时当 FinaSU 分支名 → 管理器「内核完整版本」显示成 v1.6.5-<sha>@这个名字"
         required: false
         default: ''
 
@@ -606,16 +606,16 @@ jobs:
           FINASU_BRANCH="$(printf '%s' "${CUSTOM_BUILD_USER:-Cyrene}" | sed -e 's/[[:space:]]/-/g' -e 's#[/\\]#-#g' -e 's/[~^:?*]//g' -e 's/\[//g' -e 's/\]//g' -e 's/\.\{2,\}/-/g' -e 's/^[.-]\+//' -e 's/[.-]\+$//')"
           [ -z "$FINASU_BRANCH" ] && FINASU_BRANCH="Cyrene"
           git fetch origin --tags
-          git checkout -B "$FINASU_BRANCH" v1.6.4
-          echo "FinaSU 分支名：$FINASU_BRANCH（管理器将显示 v1.6.4-<sha>@$FINASU_BRANCH）"
+          git checkout -B "$FINASU_BRANCH" v1.6.5
+          echo "FinaSU 分支名：$FINASU_BRANCH（管理器将显示 v1.6.5-<sha>@$FINASU_BRANCH）"
           cd ..
           sh ./FinaSU/kernel/setup.sh --dir "$PWD/FinaSU" "$FINASU_BRANCH"
           echo "校验绑定："
           ls -l ./common/drivers/kernelsu
           grep -n "kernelsu" ./common/drivers/Makefile
           grep -n "kernelsu/Kconfig" ./common/drivers/Kconfig
-          echo "KSUVER=FinaSU-v1.6.4-33211-BuiltIn" >> $GITHUB_ENV
-          echo "ksuver=FinaSU-v1.6.4-33211-BuiltIn" >> $GITHUB_OUTPUT
+          echo "KSUVER=FinaSU-v1.6.5-33213-BuiltIn" >> $GITHUB_ENV
+          echo "ksuver=FinaSU-v1.6.5-33213-BuiltIn" >> $GITHUB_OUTPUT
           echo "已内置 FinaSU：Root 由内核直接提供（管理器显示 Built-In）"
       - name: 🔧 Set up SUSFS (配置 SUSFS)
         if: ${{ env.ENABLE_SUSFS == 'true' }}
@@ -1057,7 +1057,7 @@ jobs:
           DEVICE_NAME="${{ github.event.inputs.device_name }}"
 
           # KSU 版本号（来自 build job 输出的 ksuver）
-          KSU_VER="FinaSU v1.6.4-33211（Built-In）"
+          KSU_VER="FinaSU v1.6.5-33213（Built-In）"
 
           # 功能配置描述
           FEATURES=""
@@ -1076,7 +1076,7 @@ jobs:
           if [ "${{ github.event.inputs.enable_droidspaces }}" = "true" ]; then
             FEATURES="${FEATURES}- ✅ Droidspaces 容器支持"$'\n'
           fi
-          FEATURES="${FEATURES}- ✅ FinaSU v1.6.4-33211 内置（Built-In）"$'\n'
+          FEATURES="${FEATURES}- ✅ FinaSU v1.6.5-33213 内置（Built-In）"$'\n'
           if [ "${{ github.event.inputs.enable_susfs }}" = "true" ]; then
             FEATURES="${FEATURES}- ✅ SUSFS 挂载支持"$'\n'
           fi
@@ -1098,7 +1098,7 @@ jobs:
           ### 📱 SM8750 欧加真通用内核 | 构建信息
 
           - **内核版本**: SM8750 (Android 15 / 6.6)
-          - **Root 方案**: FinaSU v1.6.4 内置（Built-In），刷完直接装管理器
+          - **Root 方案**: FinaSU v1.6.5 内置（Built-In），刷完直接装管理器
           - **编译时间**: ${TIME_FORM}
           - **编译机型**: ${DEVICE_NAME}
           - **内核后缀**: ${KERNEL_SUFFIX}
@@ -1117,7 +1117,7 @@ jobs:
 
           ### 📋 安装方法 | Installation Guide
 
-          1. 本内核已内置 FinaSU，直接刷 boot 后开机装管理器（必须是 v1.6.4 / 33211，内核里写死了这一版的签名大小与 SHA256，换版本会被判为不匹配、显示驱动不可用）；
+          1. 本内核已内置 FinaSU，直接刷 boot 后开机装管理器（必须是 v1.6.5 / 33213，内核里写死了这一版的签名大小与 SHA256，换版本会被判为不匹配、显示驱动不可用）；
           2. FinaSU 与其他 Root 方案不可共存——此前装过 KSU / SukiSU / BakaSU / FinaSU LKM 的，先刷回原厂 boot 与 init_boot 再刷本内核，否则两套驱动抢 hook；
           3. 若启用 Re-Kernel，需刷入配套Re-Kernel模块并配合 NoActive 软件使用，以提升后台冻结能力。
 
